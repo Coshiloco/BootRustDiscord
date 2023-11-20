@@ -1,19 +1,47 @@
 use serenity::{
     async_trait,
-    model::{channel::Message, gateway::Ready},
+    model::{channel::{Message, ReactionType}, gateway::{Ready, GatewayIntents}, id::ChannelId},
+    framework::standard::{
+        macros::{command, group},
+        StandardFramework,
+    },
     prelude::*,
-    Client,
-    framework::standard::StandardFramework,
-    model::gateway::GatewayIntents,
+    utils::Colour,
+    http::Http,
 };
-use std::process::Command;
+
+use std::{env, process::Command};
 use tempfile::NamedTempFile;
 use dotenv::dotenv;
-use std::env;
+
+
 
 struct Handler;
 
 impl Handler {
+
+         // Esta función se encargará de enviar el mensaje de bienvenida.
+    async fn send_welcome_message(&self, ctx: &Context) {
+        let channel_id = ChannelId(1022397353736548385); // Reemplaza con el ID de tu canal real.
+
+        let _ = channel_id.send_message(&ctx.http, |m| {
+            m.content("¡Hola! Soy un bot que compila código Rust. Aquí puedes probar tus códigos:");
+            m.embed(|e| {
+                e.title("Funcionalidades del Bot Rust")
+                 .description("Este bot puede compilar y ejecutar tu código Rust. Usa el comando `!compile` seguido de tu código en un bloque de código para probarlo.")
+                 .field("Compilar Código", "Usa `!compile` con bloques de código Rust.", false)
+                 .field("Ejemplo", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
+                 .colour(Colour::from_rgb(0, 255, 0))
+            });
+            m.reactions(vec![
+                ReactionType::Unicode(String::from("🔨")), // Compilar
+                ReactionType::Unicode(String::from("📚")), // Ejemplos
+                // Añade más reacciones según sea necesario.
+            ])
+        }).await.expect("Error al enviar el mensaje.");
+    }
+
+
     fn extract_rust_code(content: &str) -> Option<String> {
         let start_pattern = "```rust";
         let end_pattern = "```";
@@ -25,7 +53,7 @@ impl Handler {
         }
         None
     }
-
+    
     async fn compile_and_execute_rust_code(ctx: &Context, msg: &Message, code: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = NamedTempFile::new()?;
         std::fs::write(file.path(), code)?;
@@ -74,8 +102,10 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+        // Llama a la función para enviar el mensaje de bienvenida.
+        self.send_welcome_message(&ctx).await;
     }
 }
 
@@ -83,6 +113,7 @@ impl EventHandler for Handler {
 async fn main() {
     dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+
     let intents = GatewayIntents::all();
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
