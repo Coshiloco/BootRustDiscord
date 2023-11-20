@@ -13,65 +13,64 @@ use std::env;
 
 struct Handler;
 
+impl Handler {
+    fn extract_rust_code(content: &str) -> Option<String> {
+        let start_pattern = "```rust";
+        let end_pattern = "```";
+        if let Some(start) = content.find(start_pattern) {
+            if let Some(end) = content[start + start_pattern.len()..].find(end_pattern) {
+                let code = &content[start + start_pattern.len()..start + start_pattern.len() + end].trim();
+                return Some(code.to_string());
+            }
+        }
+        None
+    }
+
+    async fn compile_and_execute_rust_code(ctx: &Context, msg: &Message, code: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = NamedTempFile::new()?;
+        std::fs::write(file.path(), code)?;
+
+        let output = Command::new("rustc")
+            .arg(file.path())
+            .arg("--out-dir")
+            .arg(file.path().parent().unwrap())
+            .arg("--crate-name")
+            .arg("user_code")
+            .output()?;
+
+        if !output.status.success() {
+            let error_message = format!("Compilation error:\n```\n{}\n```", String::from_utf8_lossy(&output.stderr));
+            msg.channel_id.say(&ctx.http, &error_message).await?;
+            return Ok(());
+        }
+
+        let executable_path = file.path().parent().unwrap().join(if cfg!(target_os = "windows") { "user_code.exe" } else { "user_code" });
+        let execution_output = Command::new(&executable_path).output()?;
+
+        if !execution_output.status.success() {
+            let error_message = format!("Execution error:\n```\n{}\n```", String::from_utf8_lossy(&execution_output.stderr));
+            msg.channel_id.say(&ctx.http, &error_message).await?;
+            return Ok(());
+        }
+
+        let output_message = format!("Output:\n```\n{}\n```", String::from_utf8_lossy(&execution_output.stdout));
+        msg.channel_id.say(&ctx.http, &output_message).await?;
+
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.content.starts_with("!compile") {
-            if let Some(code_block_start) = msg.content.find("```rust") {
-                let code_block_trimmed = &msg.content[code_block_start + 7..];
-                if let Some(code_block_end) = code_block_trimmed.find("```") {
-                    let code = &code_block_trimmed[..code_block_end].trim();
-
-                    let full_code = format!("fn main() {{\n{}\n}}", code);
-                    let mut file = NamedTempFile::new().expect("Failed to create temp file");
-                    std::fs::write(file.path(), full_code).expect("Failed to write to temp file");
-
-                    let output = Command::new("rustc")
-                        .arg(file.path())
-                        .arg("--out-dir")
-                        .arg(file.path().parent().unwrap())
-                        .arg("--crate-name")
-                        .arg("user_code")
-                        .output()
-                        .expect("Failed to execute process");
-
-                    if output.status.success() {
-                        let executable = file.path().parent().unwrap().join("user_code");
-                        let execution_output = Command::new(&executable)
-                            .output()
-                            .expect("Failed to execute binary");
-
-                        if execution_output.status.success() {
-                            let stdout = String::from_utf8_lossy(&execution_output.stdout);
-                            let message = if stdout.is_empty() {
-                                "No output".to_string()
-                            } else {
-                                format!("Output:\n```\n{}\n```", stdout)
-                            };
-                            let _ = msg.channel_id.say(&ctx.http, message).await;
-                        } else {
-                            let stderr = String::from_utf8_lossy(&execution_output.stderr);
-                            let message = format!("Execution Error:\n```\n{}\n```", stderr);
-                            let _ = msg.channel_id.say(&ctx.http, message).await;
-                        }
-                    } else {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        let message = format!("Compilation Error:\n```\n{}\n```", stderr);
-                        let _ = msg.channel_id.say(&ctx.http, message).await;
-                    }
-                } else {
-                    let _ = msg.channel_id.say(&ctx.http, "Error: No se encontró el final del bloque de código Rust.").await;
+            if let Some(code) = Handler::extract_rust_code(&msg.content) {
+                if let Err(why) = Handler::compile_and_execute_rust_code(&ctx, &msg, &code).await {
+                    println!("Error handling rust code: {:?}", why);
                 }
             } else {
-                let _ = msg.channel_id.say(&ctx.http, "Error: Por favor, proporciona el código en un bloque de código Rust.").await;
+                let _ = msg.channel_id.say(&ctx.http, "Please provide Rust code inside a code block.").await;
             }
-        } else if msg.content == "!example" {
-            let example_code = r#"```rust
-fn main() {
-    println!("Hello, world!");
-}
-```"#;
-            let _ = msg.channel_id.say(&ctx.http, example_code).await;
         }
     }
 
@@ -83,9 +82,7 @@ fn main() {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-
     let intents = GatewayIntents::all();
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
