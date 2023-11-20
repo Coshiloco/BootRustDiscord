@@ -49,15 +49,19 @@ impl Handler {
         }).await.expect("Error al enviar el mensaje.");
     }
     
-    
     async fn handle_compile_command(&self, ctx: &Context, reaction: &Reaction) {
-        // Aquí necesitas una forma de relacionar la reacción con el mensaje original que contiene el código.
-        // Esto podría ser un almacenamiento en memoria o una base de datos donde guardas los mensajes y su relación con el código Rust.
+        
     }
 
     async fn handle_example_command(&self, ctx: &Context, reaction: &Reaction) {
-        // Función para manejar cuando alguien reacciona para obtener un ejemplo de código.
-        // Podrías tener una serie de ejemplos predefinidos que puedes enviar al canal.
+        // Simplemente envía un ejemplo de código fijo al canal donde se reaccionó
+        let channel_id = reaction.channel_id;
+        let example_code = r#"```rust
+fn main() {
+    println!("Hello, World!");
+}
+```"#;
+        let _ = channel_id.say(&ctx.http, example_code).await.expect("Error sending message");
     }
 
 
