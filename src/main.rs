@@ -1,9 +1,16 @@
+// Importaciones necesarias
 use serenity::{
     async_trait,
-    model::{channel::{Message, ReactionType}, gateway::{Ready, GatewayIntents}, id::ChannelId},
+    model::{
+        channel::{Message, ReactionType, Reaction},
+        gateway::{Ready, GatewayIntents},
+        id::{ChannelId, MessageId},
+        event::ResumedEvent,
+    },
     framework::standard::{
         macros::{command, group},
         StandardFramework,
+        CommandResult,
     },
     prelude::*,
     utils::Colour,
@@ -13,6 +20,7 @@ use serenity::{
 use std::{env, process::Command};
 use tempfile::NamedTempFile;
 use dotenv::dotenv;
+
 
 
 
@@ -39,6 +47,17 @@ impl Handler {
                 // Añade más reacciones según sea necesario.
             ])
         }).await.expect("Error al enviar el mensaje.");
+    }
+    
+    
+    async fn handle_compile_command(&self, ctx: &Context, reaction: &Reaction) {
+        // Aquí necesitas una forma de relacionar la reacción con el mensaje original que contiene el código.
+        // Esto podría ser un almacenamiento en memoria o una base de datos donde guardas los mensajes y su relación con el código Rust.
+    }
+
+    async fn handle_example_command(&self, ctx: &Context, reaction: &Reaction) {
+        // Función para manejar cuando alguien reacciona para obtener un ejemplo de código.
+        // Podrías tener una serie de ejemplos predefinidos que puedes enviar al canal.
     }
 
 
@@ -98,6 +117,24 @@ impl EventHandler for Handler {
                 }
             } else {
                 let _ = msg.channel_id.say(&ctx.http, "Please provide Rust code inside a code block.").await;
+            }
+        }
+    }
+    
+    async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
+        if let Some(guild_id) = reaction.guild_id {
+            if let Ok(member) = guild_id.member(&ctx.http, &reaction.user_id.unwrap()).await {
+                if !member.user.bot {
+                    match reaction.emoji {
+                        ReactionType::Unicode(ref emoji) if emoji == "🔨" => {
+                            self.handle_compile_command(&ctx, &reaction).await;
+                        },
+                        ReactionType::Unicode(ref emoji) if emoji == "📚" => {
+                            self.handle_example_command(&ctx, &reaction).await;
+                        },
+                        _ => {} // Maneja otros emojis si es necesario
+                    }
+                }
             }
         }
     }
