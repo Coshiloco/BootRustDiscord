@@ -29,29 +29,34 @@ struct Handler;
 impl Handler {
 
          // Esta función se encargará de enviar el mensaje de bienvenida.
-    async fn send_welcome_message(&self, ctx: &Context) {
-        let channel_id = ChannelId(1022397353736548385); // Reemplaza con el ID de tu canal real.
-
-        let _ = channel_id.send_message(&ctx.http, |m| {
-            m.content("¡Hola! Soy un bot que compila código Rust. Aquí puedes probar tus códigos:");
-            m.embed(|e| {
-                e.title("Funcionalidades del Bot Rust")
-                 .description("Este bot puede compilar y ejecutar tu código Rust. Usa el comando `!compile` seguido de tu código en un bloque de código para probarlo.")
-                 .field("Compilar Código", "Usa `!compile` con bloques de código Rust.", false)
-                 .field("Ejemplo", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
-                 .colour(Colour::from_rgb(0, 255, 0))
-            });
-            m.reactions(vec![
-                ReactionType::Unicode(String::from("🔨")), // Compilar
-                ReactionType::Unicode(String::from("📚")), // Ejemplos
-                // Añade más reacciones según sea necesario.
-            ])
-        }).await.expect("Error al enviar el mensaje.");
-    }
+         async fn send_welcome_message(&self, ctx: &Context) {
+            let channel_id = ChannelId(1123024565178744962); // Reemplaza con el ID de tu canal real.
     
-    async fn handle_compile_command(&self, ctx: &Context, reaction: &Reaction) {
-        
-    }
+            let _ = channel_id.send_message(&ctx.http, |m| {
+                m.content("¡Hola! Soy un bot que compila código Rust. Aquí puedes probar tus códigos:");
+                m.embed(|e| {
+                    e.title("Funcionalidades del Bot Rust")
+                     .description("Este bot puede compilar y ejecutar tu código Rust. Usa el comando `!compile` seguido de tu código en un bloque de código para probarlo.")
+                     .field("¿Cómo usar este bot?", "A continuación, te explico cómo puedes interactuar conmigo:", false)
+                     .field("Compilar Código", "Reacciona con 🔨 y te enviaré una plantilla de código que puedes compilar.", false)
+                     .field("Obtener un Ejemplo", "Reacciona con 📚 y te proporcionaré un ejemplo de código Rust.", false)
+                     .field("Ejemplo de Compilación", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
+                     .colour(Colour::from_rgb(0, 255, 0))
+                });
+                m.reactions(vec![
+                    ReactionType::Unicode(String::from("🔨")), // Compilar
+                    ReactionType::Unicode(String::from("📚")), // Ejemplos
+                ])
+            }).await.expect("Error al enviar el mensaje.");
+        }
+    
+    
+// Asegúrate de actualizar la firma de send_compile_example para aceptar ChannelId directamente.
+async fn send_compile_example(&self, ctx: &Context, channel_id: ChannelId) {
+    let example_code = "¡Aquí tienes un ejemplo de código Rust que puedes compilar!\n\nEscribe en el chat el siguiente comando y código:\n\n!compile \\`\\`\\`rust\nfn main() {\n    println!(\"Esto es un ejemplo que compila\");\n}\n\\`\\`\\`";
+    let _ = channel_id.say(&ctx.http, example_code).await.expect("Error sending message");
+}
+    
 
     async fn handle_example_command(&self, ctx: &Context, reaction: &Reaction) {
         // Simplemente envía un ejemplo de código fijo al canal donde se reaccionó
@@ -129,9 +134,11 @@ impl EventHandler for Handler {
         if let Some(guild_id) = reaction.guild_id {
             if let Ok(member) = guild_id.member(&ctx.http, &reaction.user_id.unwrap()).await {
                 if !member.user.bot {
+                    let channel_id = reaction.channel_id; // Obtiene el ChannelId desde la reacción.
                     match reaction.emoji {
                         ReactionType::Unicode(ref emoji) if emoji == "🔨" => {
-                            self.handle_compile_command(&ctx, &reaction).await;
+                            // Ahora pasamos el ChannelId directamente.
+                            self.send_compile_example(&ctx, channel_id).await;
                         },
                         ReactionType::Unicode(ref emoji) if emoji == "📚" => {
                             self.handle_example_command(&ctx, &reaction).await;
