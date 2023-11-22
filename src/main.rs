@@ -24,13 +24,54 @@ use serenity::{
 
 use std::{env, process::Command};
 use tempfile::NamedTempFile;
+use serenity::model::id::RoleId;
+use std::collections::HashMap;
 use dotenv::dotenv;
 
+struct RoleManager {
+    roles: HashMap<String, RoleId>,
+}
+
+impl RoleManager {
+    fn new() -> Self {
+        let mut manager = RoleManager {
+            roles: HashMap::new(),
+        };
+        manager.initialize_roles();
+        manager
+    }
+
+    fn initialize_roles(&mut self) {
+        // Insertar cada rol y su respectivo ID
+        self.roles.insert("🤖".to_string(), RoleId(1168603086235902012)); // Android
+        self.roles.insert("🍏".to_string(), RoleId(1169202492953858048)); // iOS
+        self.roles.insert("🌐".to_string(), RoleId(1168603506891034684)); // Web
+        self.roles.insert("⚙️".to_string(), RoleId(1168603873238323220)); // DevOps
+        self.roles.insert("📱".to_string(), RoleId(1168604780277547128)); // Kotlin
+        self.roles.insert("🐍".to_string(), RoleId(1168605004312084612)); // Python
+        self.roles.insert("☕".to_string(), RoleId(1168605218754281504)); // Java
+        self.roles.insert("🟨".to_string(), RoleId(1168605273204723733)); // JavaScript
+        self.roles.insert("🐘".to_string(), RoleId(1168605349402648697)); // PHP
+        self.roles.insert("<:rust:4504>".to_string(), RoleId(1168605349402648697)); // Rust
+        // Agrega más roles si es necesario
+        self.roles.insert("☁️".to_string(), RoleId(889900112233445566)); // AWS
+        self.roles.insert("🔙".to_string(), RoleId(991122334455667788)); // Backend
+        self.roles.insert("🔚".to_string(), RoleId(992233445566778899)); // Frontend
+        self.roles.insert("🔰".to_string(), RoleId(993344556677889900)); // Trainee Player
+        self.roles.insert("🥉".to_string(), RoleId(994455667788990011)); // Junior Player
+        self.roles.insert("🥈".to_string(), RoleId(995566778899001122)); // Mid Player
+        self.roles.insert("🥇".to_string(), RoleId(996677889900112233)); // Senior Player
+        self.roles.insert("🏆".to_string(), RoleId(997788990011223344)); // Expert Player
+    }
+}
 
 
 
 
-struct Handler;
+
+struct Handler {
+    role_manager: RoleManager,
+}
 
 impl Handler {
 
@@ -49,6 +90,7 @@ impl Handler {
                      .field("Ejemplo de Compilación", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
                      .colour(Colour::from_rgb(0, 255, 0))
                 });
+  // Creamos los botones aquí
   // Creamos los botones aquí
   m.components(|c| {
     c.create_action_row(|row| {
@@ -183,10 +225,8 @@ impl EventHandler for Handler {
             }
         }
     }
-
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-        // Llama a la función para enviar el mensaje de bienvenida.
         self.send_welcome_message(&ctx).await;
     }
 }
@@ -197,8 +237,15 @@ async fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let intents = GatewayIntents::all();
+
+    let role_manager = RoleManager::new();
+
+    let handler = Handler {
+        role_manager,
+    };
+
     let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
+        .event_handler(handler) // Usar la instancia 'handler' en lugar de la estructura 'Handler'
         .framework(StandardFramework::new().configure(|c| c.prefix("!")))
         .await
         .expect("Error creating client");
