@@ -29,12 +29,13 @@ use serenity::builder::CreateActionRow;
 use std::collections::HashMap;
 use dotenv::dotenv;
 
-
+// Definicion de la estructura RoleManager , que gestiona los roles del servidor 
 struct RoleManager {
     roles: HashMap<String, RoleId>,
 }
 
 impl RoleManager {
+    // Constructor para crear una nueva instancia de RoleManager
     fn new() -> Self {
         let mut manager = RoleManager {
             roles: HashMap::new(),
@@ -42,7 +43,8 @@ impl RoleManager {
         manager.initialize_roles();
         manager
     }
-
+    
+    // Metodo para inicializar el RoleManager con los roles disponibles
     fn initialize_roles(&mut self) {
         // Insertar cada rol y su respectivo ID
         self.roles.insert("🤖".to_string(), RoleId(1168603086235902012)); // Android
@@ -65,15 +67,21 @@ impl RoleManager {
         self.roles.insert("🥇".to_string(), RoleId(996677889900112233)); // Senior Player
         self.roles.insert("🏆".to_string(), RoleId(997788990011223344)); // Expert Player
     }
+    
+    // Encontrar el id del usuario
+    fn find_role_id_by_custom_id(&self, custom_id: &str) -> Option<&RoleId> {
+        self.roles.get(custom_id)
+    }
 }
 
-
+// Definición de la estructura RoleButton para representar botones de rol
 struct RoleButton {
     custom_id: String,
     label: String,
 }
 
 impl RoleButton {
+    // Constructor para crear un nuevo RoleButton
     fn new(custom_id: &str, label: &str) -> Self {
         RoleButton { 
             custom_id: custom_id.to_string(), 
@@ -84,7 +92,7 @@ impl RoleButton {
 
 
 
-
+// Definición de la estructura Handler, que manejará los eventos del bot
 struct Handler {
     role_manager: RoleManager,
 }
@@ -93,7 +101,7 @@ impl Handler {
 
          // Esta función se encargará de enviar el mensaje de bienvenida.
          async fn send_welcome_message(&self, ctx: &Context) {
-            let channel_id = ChannelId(1022397353736548385); // Reemplaza con el ID de tu canal real.
+            let channel_id = ChannelId(1123024565178744962); // Reemplaza con el ID de tu canal real.
             let role_buttons = create_role_buttons();// Llamamos a la función para obtener los botones de roles
 
             let _ = channel_id.send_message(&ctx.http, |m| {
@@ -229,20 +237,26 @@ impl EventHandler for Handler {
         }
     }
     
-     // Agregamos un nuevo método para manejar las interacciones de los botones
-     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::MessageComponent(mc) = interaction {
-            if mc.data.custom_id.starts_with("role_") {
-                let response = format!("Botón {} presionado", mc.data.custom_id);
-                if let Err(why) = mc.create_interaction_response(&ctx.http, |r| {
-                    r.kind(InteractionResponseType::ChannelMessageWithSource) // Actualizado
-                     .interaction_response_data(|m| m.content(response))
-                }).await {
-                    println!("Error al enviar respuesta de interacción: {:?}", why);
-                }
+// Dentro de tu EventHandler, agrega el método para manejar interacciones de componente de mensaje.
+async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+    if let Interaction::MessageComponent(mc) = interaction {
+        if mc.data.custom_id.starts_with("role_") {
+            let response = format!("Botón {} presionado", mc.data.custom_id);
+            if let Err(why) = mc.create_interaction_response(&ctx.http, |r| {
+                r.kind(InteractionResponseType::ChannelMessageWithSource) // Actualizado
+                 .interaction_response_data(|m| m.content(response))
+            }).await {
+                println!("Error al enviar respuesta de interacción: {:?}", why);
             }
         }
     }
+}
+
+
+    
+    
+
+
     
     async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
         if let Some(guild_id) = reaction.guild_id {
