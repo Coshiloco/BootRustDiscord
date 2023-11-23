@@ -25,8 +25,10 @@ use serenity::{
 use std::{env, process::Command};
 use tempfile::NamedTempFile;
 use serenity::model::id::RoleId;
+use serenity::builder::CreateActionRow;
 use std::collections::HashMap;
 use dotenv::dotenv;
+
 
 struct RoleManager {
     roles: HashMap<String, RoleId>,
@@ -52,7 +54,7 @@ impl RoleManager {
         self.roles.insert("☕".to_string(), RoleId(1168605218754281504)); // Java
         self.roles.insert("🟨".to_string(), RoleId(1168605273204723733)); // JavaScript
         self.roles.insert("🐘".to_string(), RoleId(1168605349402648697)); // PHP
-        self.roles.insert("<:rust:4504>".to_string(), RoleId(1168605349402648697)); // Rust
+        self.roles.insert("🦀".to_string(), RoleId(1168605349402648697)); // Rust
         // Agrega más roles si es necesario
         self.roles.insert("☁️".to_string(), RoleId(889900112233445566)); // AWS
         self.roles.insert("🔙".to_string(), RoleId(991122334455667788)); // Backend
@@ -66,6 +68,20 @@ impl RoleManager {
 }
 
 
+struct RoleButton {
+    custom_id: String,
+    label: String,
+}
+
+impl RoleButton {
+    fn new(custom_id: &str, label: &str) -> Self {
+        RoleButton { 
+            custom_id: custom_id.to_string(), 
+            label: label.to_string() 
+        }
+    }
+}
+
 
 
 
@@ -77,8 +93,9 @@ impl Handler {
 
          // Esta función se encargará de enviar el mensaje de bienvenida.
          async fn send_welcome_message(&self, ctx: &Context) {
-            let channel_id = ChannelId(1123024565178744962); // Reemplaza con el ID de tu canal real.
-    
+            let channel_id = ChannelId(1022397353736548385); // Reemplaza con el ID de tu canal real.
+            let role_buttons = create_role_buttons();// Llamamos a la función para obtener los botones de roles
+
             let _ = channel_id.send_message(&ctx.http, |m| {
                 m.content("¡Hola! Soy un bot que compila código Rust. Aquí puedes probar tus códigos:");
                 m.embed(|e| {
@@ -93,16 +110,37 @@ impl Handler {
   // Creamos los botones aquí
   // Creamos los botones aquí
   m.components(|c| {
-    c.create_action_row(|row| {
-        for i in 1..=5 {
-            row.create_button(|b| {
-                b.custom_id(format!("role_{}", i))
-                 .label(format!("Rol {}", i))
-                 .style(ButtonStyle::Primary) // Actualizado según las advertencias
-            });
+    let buttons_per_row = 5;
+    let mut current_row_buttons = 0;
+    let mut action_rows: Vec<CreateActionRow> = Vec::new();
+
+    for button in role_buttons.iter() {
+        if current_row_buttons == buttons_per_row {
+            // Reiniciar el contador para la nueva fila
+            current_row_buttons = 0;
         }
-        row
-    })
+
+        if current_row_buttons == 0 {
+            // Comenzar una nueva fila si la actual está llena o es la primera vez
+            action_rows.push(CreateActionRow::default());
+        }
+
+        if let Some(last_row) = action_rows.last_mut() {
+            last_row.create_button(|b| {
+                b.custom_id(&button.custom_id)
+                    .label(&button.label)
+                    .style(ButtonStyle::Primary)
+            });
+            current_row_buttons += 1; // Incrementar el contador de botones para la fila actual
+        }
+    }
+
+    // Añadir todas las filas de acción al componente
+    for row in action_rows {
+        c.add_action_row(row);
+    }
+    
+    c
 });
                 m.reactions(vec![
                     ReactionType::Unicode(String::from("🔨")), // Compilar
@@ -253,4 +291,29 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("Client error: {:?}", why);
     }
+}
+
+
+fn create_role_buttons() -> Vec<RoleButton> {
+    vec![
+        RoleButton::new("role_android", "🤖 Android"),
+        RoleButton::new("role_ios", "🍏 iOS"),
+        RoleButton::new("role_web", "🌐 Web"),
+        RoleButton::new("role_devops", "⚙️ DevOps"),
+        RoleButton::new("role_kotlin", "📱 Kotlin"),
+        RoleButton::new("role_python", "🐍 Python"),
+        RoleButton::new("role_java", "☕ Java"),
+        RoleButton::new("role_javascript", "🟨 JavaScript"),
+        RoleButton::new("role_php", "🐘 PHP"),
+        RoleButton::new("role_rust", "🦀 Rust"),
+        RoleButton::new("role_aws", "☁️ AWS"),
+        RoleButton::new("role_google_cloud", "☁️ Google Cloud"),
+        RoleButton::new("role_backend", "🔙 Backend"),
+        RoleButton::new("role_frontend", "🔚 Frontend"),
+        RoleButton::new("role_trainee", "🔰 Trainee Player"),
+        RoleButton::new("role_junior", "🥉 Junior Player"),
+        RoleButton::new("role_mid", "🟠 Mid Player"),
+        RoleButton::new("role_senior", "🔵 Senior Player"),
+        RoleButton::new("role_expert", "🏆 Expert Player"),
+    ]
 }
