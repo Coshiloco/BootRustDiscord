@@ -129,7 +129,7 @@ impl Handler {
             last_row.create_button(|b| {
                 b.custom_id(&button.custom_id)
                     .label(&button.label)
-                    .style(ButtonStyle::Primary)
+                    .style(ButtonStyle::Secondary)
             });
             current_row_buttons += 1; // Incrementar el contador de botones para la fila actual
         }
