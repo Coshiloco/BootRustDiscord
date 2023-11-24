@@ -10,7 +10,7 @@ use serenity::{
             component::ButtonStyle,
         },
         event::ResumedEvent,
-        prelude::Interaction,
+        prelude::Interaction, guild,
     },
     framework::standard::{
         macros::{command, group},
@@ -22,10 +22,11 @@ use serenity::{
     http::Http,
 };
 
-use std::{env, process::Command};
+use std::{env, process::Command, fmt::format};
 use tempfile::NamedTempFile;
 use serenity::model::id::RoleId;
 use serenity::builder::CreateActionRow;
+use serenity::model::prelude::ChannelType;
 use std::collections::HashMap;
 use dotenv::dotenv;
 
@@ -56,16 +57,16 @@ impl RoleManager {
         self.roles.insert("role_java".to_string(), RoleId(1168605218754281504)); // Java
         self.roles.insert("role_javascript".to_string(), RoleId(1168605273204723733)); // JavaScript
         self.roles.insert("role_php".to_string(), RoleId(1168605349402648697)); // PHP
-        self.roles.insert("role_rust".to_string(), RoleId(1168605349402648697)); // Rust
+        self.roles.insert("role_rust".to_string(), RoleId(1168605383288422550)); // Rust
         // Agrega más roles sirole_androides necesario
-        self.roles.insert("role_aws".to_string(), RoleId(889900112233445566)); // AWS
-        self.roles.insert("role_google_cloud".to_string(), RoleId(991122334455667788)); // Backend
-        self.roles.insert("role_backend".to_string(), RoleId(992233445566778899)); // Frontend
-        self.roles.insert("role_frontend".to_string(), RoleId(993344556677889900)); // Trainee Player
-        self.roles.insert("role_trainee".to_string(), RoleId(994455667788990011)); // Junior Player
-        self.roles.insert("role_junior".to_string(), RoleId(995566778899001122)); // Mid Player
-        self.roles.insert("role_mid".to_string(), RoleId(996677889900112233)); // Senior Player
-        self.roles.insert("role_senior".to_string(), RoleId(997788990011223344)); // Expert Player
+        self.roles.insert("role_aws".to_string(), RoleId(1168605473818284062)); // AWS
+        self.roles.insert("role_google_cloud".to_string(), RoleId(1168605507074928670)); // Backend
+        self.roles.insert("role_backend".to_string(), RoleId(1168605571289710764)); // Frontend
+        self.roles.insert("role_frontend".to_string(), RoleId(1168605654529871882)); // Trainee Player
+        self.roles.insert("role_trainee".to_string(), RoleId(1168605956633022476)); // Junior Player
+        self.roles.insert("role_junior".to_string(), RoleId(1168606003764404294)); // Mid Player
+        self.roles.insert("role_mid".to_string(), RoleId(1168606283381870652)); // Senior Player
+        self.roles.insert("role_senior".to_string(), RoleId(1168606105459507230)); // Expert Player
     }
     
     // Encontrar el id del usuario
@@ -252,14 +253,44 @@ async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
                         if let Err(why) = member.add_role(&ctx.http, role_id).await {
                             println!("Error al asignar rol: {:?}", why);
                         } else {
-                            // Enviar mensaje de confirmación
-                            let response = format!("Rol {} asignado correctamente!", mc.data.custom_id);
-                            if let Err(why) = mc.create_interaction_response(&ctx.http, |r| {
-                                r.kind(InteractionResponseType::ChannelMessageWithSource)
-                                 .interaction_response_data(|m| m.content(response))
-                            }).await {
-                                println!("Error al enviar respuesta de interacción: {:?}", why);
+                            // Formar el mensaje de respuesta
+                            let response = if let Ok(user) = user_id.to_user(&ctx.http).await {
+                                let username = format!("{}#{}", user.name, user.discriminator);
+                                let guild_name = guild_id.to_guild_cached(&ctx.cache)
+                                    .map(|g| g.name)
+                                    .unwrap_or_else(|| "Desconocido".to_string());
+                                format!("Hola {}, he asignado el rol {} correctamente en el servidor {}.", username, mc.data.custom_id, guild_name)
+                            } else {
+                                "Error al obtener el usuario.".to_string()
+                            };
+
+                            // Enviar mensaje directo al usuario
+                            if let Ok(dm_channel) = user_id.create_dm_channel(&ctx.http).await {
+                                let _ = dm_channel.say(&ctx.http, &response).await;
                             }
+
+                            // Enviar mensaje al canal role-assignment-log
+if let Ok(channels) = guild_id.channels(&ctx.http).await {
+    if let Some((channel_id, _)) = channels.iter().find(|(_id, channel)| channel.name == "role-assignment-log") {
+        if let Err(why) = channel_id.say(&ctx.http, &response).await {
+            println!("Error al enviar mensaje al canal role-assignment-log: {:?}", why);
+        }
+    } else {
+        // Canal no encontrado, intenta crearlo
+        println!("Canal role-assignment-log no encontrado, intentando crearlo...");
+        match guild_id.create_channel(&ctx.http, |c| c.name("role-assignment-log").kind(ChannelType::Text)).await {
+            Ok(channel) => {
+                println!("Canal creado con éxito.");
+                if let Err(why) = channel.say(&ctx.http, &response).await {
+                    println!("Error al enviar mensaje al nuevo canal role-assignment-log: {:?}", why);
+                }
+            }
+            Err(why) => println!("Error al crear el canal role-assignment-log: {:?}", why),
+        }
+    }
+} else {
+    println!("Error al obtener la lista de canales del servidor.");
+}
                         }
                     } else {
                         println!("ID de rol no encontrado para: {}", mc.data.custom_id);
