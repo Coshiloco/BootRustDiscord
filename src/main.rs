@@ -126,6 +126,7 @@ impl Handler {
                      .field("Compilar Código", "Reacciona con 🔨 y te enviaré una plantilla de código que puedes compilar.", false)
                      .field("Obtener un Ejemplo", "Reacciona con 📚 y te proporcionaré un ejemplo de código Rust.", false)
                      .field("Ejemplo de Compilación", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
+                     .field("Selecciona un boton para asignarte un rol", "Si le das al boton de los roles que tienen su icono y su nombre correspondiente que tienes disponibles de las tecnoologias se te asignara en el servidor", false)
                      .colour(Colour::from_rgb(0, 255, 0))
                 });
   // Creamos los botones aquí
