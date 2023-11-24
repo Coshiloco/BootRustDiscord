@@ -47,25 +47,25 @@ impl RoleManager {
     // Metodo para inicializar el RoleManager con los roles disponibles
     fn initialize_roles(&mut self) {
         // Insertar cada rol y su respectivo ID
-        self.roles.insert("🤖".to_string(), RoleId(1168603086235902012)); // Android
-        self.roles.insert("🍏".to_string(), RoleId(1169202492953858048)); // iOS
-        self.roles.insert("🌐".to_string(), RoleId(1168603506891034684)); // Web
-        self.roles.insert("⚙️".to_string(), RoleId(1168603873238323220)); // DevOps
-        self.roles.insert("📱".to_string(), RoleId(1168604780277547128)); // Kotlin
-        self.roles.insert("🐍".to_string(), RoleId(1168605004312084612)); // Python
-        self.roles.insert("☕".to_string(), RoleId(1168605218754281504)); // Java
-        self.roles.insert("🟨".to_string(), RoleId(1168605273204723733)); // JavaScript
-        self.roles.insert("🐘".to_string(), RoleId(1168605349402648697)); // PHP
-        self.roles.insert("🦀".to_string(), RoleId(1168605349402648697)); // Rust
-        // Agrega más roles si es necesario
-        self.roles.insert("☁️".to_string(), RoleId(889900112233445566)); // AWS
-        self.roles.insert("🔙".to_string(), RoleId(991122334455667788)); // Backend
-        self.roles.insert("🔚".to_string(), RoleId(992233445566778899)); // Frontend
-        self.roles.insert("🔰".to_string(), RoleId(993344556677889900)); // Trainee Player
-        self.roles.insert("🥉".to_string(), RoleId(994455667788990011)); // Junior Player
-        self.roles.insert("🥈".to_string(), RoleId(995566778899001122)); // Mid Player
-        self.roles.insert("🥇".to_string(), RoleId(996677889900112233)); // Senior Player
-        self.roles.insert("🏆".to_string(), RoleId(997788990011223344)); // Expert Player
+        self.roles.insert("role_android".to_string(), RoleId(1168603086235902012)); // Android
+        self.roles.insert("role_ios".to_string(), RoleId(1169202492953858048)); // iOS
+        self.roles.insert("role_web".to_string(), RoleId(1168603506891034684)); // Web
+        self.roles.insert("role_devops".to_string(), RoleId(1168603873238323220)); // DevOps
+        self.roles.insert("role_kotlin".to_string(), RoleId(1168604780277547128)); // Kotlin
+        self.roles.insert("role_python".to_string(), RoleId(1168605004312084612)); // Python
+        self.roles.insert("role_java".to_string(), RoleId(1168605218754281504)); // Java
+        self.roles.insert("role_javascript".to_string(), RoleId(1168605273204723733)); // JavaScript
+        self.roles.insert("role_php".to_string(), RoleId(1168605349402648697)); // PHP
+        self.roles.insert("role_rust".to_string(), RoleId(1168605349402648697)); // Rust
+        // Agrega más roles sirole_androides necesario
+        self.roles.insert("role_aws".to_string(), RoleId(889900112233445566)); // AWS
+        self.roles.insert("role_google_cloud".to_string(), RoleId(991122334455667788)); // Backend
+        self.roles.insert("role_backend".to_string(), RoleId(992233445566778899)); // Frontend
+        self.roles.insert("role_frontend".to_string(), RoleId(993344556677889900)); // Trainee Player
+        self.roles.insert("role_trainee".to_string(), RoleId(994455667788990011)); // Junior Player
+        self.roles.insert("role_junior".to_string(), RoleId(995566778899001122)); // Mid Player
+        self.roles.insert("role_mid".to_string(), RoleId(996677889900112233)); // Senior Player
+        self.roles.insert("role_senior".to_string(), RoleId(997788990011223344)); // Expert Player
     }
     
     // Encontrar el id del usuario
@@ -241,12 +241,34 @@ impl EventHandler for Handler {
 async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
     if let Interaction::MessageComponent(mc) = interaction {
         if mc.data.custom_id.starts_with("role_") {
-            let response = format!("Botón {} presionado", mc.data.custom_id);
-            if let Err(why) = mc.create_interaction_response(&ctx.http, |r| {
-                r.kind(InteractionResponseType::ChannelMessageWithSource) // Actualizado
-                 .interaction_response_data(|m| m.content(response))
-            }).await {
-                println!("Error al enviar respuesta de interacción: {:?}", why);
+            // Comprueba si la interacción es dentro de un servidor (Guild)
+            if let Some(guild_id) = mc.guild_id {
+                let user_id = mc.user.id; // UserId directo, no es Option
+
+                // Intentar obtener una instancia mutable del Member
+                if let Ok(mut member) = guild_id.member(&ctx.http, user_id).await {
+                    // Procesar la asignación del rol
+                    if let Some(role_id) = self.role_manager.find_role_id_by_custom_id(&mc.data.custom_id) {
+                        if let Err(why) = member.add_role(&ctx.http, role_id).await {
+                            println!("Error al asignar rol: {:?}", why);
+                        } else {
+                            // Enviar mensaje de confirmación
+                            let response = format!("Rol {} asignado correctamente!", mc.data.custom_id);
+                            if let Err(why) = mc.create_interaction_response(&ctx.http, |r| {
+                                r.kind(InteractionResponseType::ChannelMessageWithSource)
+                                 .interaction_response_data(|m| m.content(response))
+                            }).await {
+                                println!("Error al enviar respuesta de interacción: {:?}", why);
+                            }
+                        }
+                    } else {
+                        println!("ID de rol no encontrado para: {}", mc.data.custom_id);
+                    }
+                } else {
+                    println!("No se pudo obtener el miembro del servidor.");
+                }
+            } else {
+                println!("La interacción no ocurrió en un servidor.");
             }
         }
     }
