@@ -24,7 +24,12 @@ use serenity::builder::CreateActionRow;
 use serenity::model::id::RoleId;
 use serenity::model::prelude::ChannelType;
 use std::collections::HashMap;
+use serenity::model::prelude::PermissionOverwrite;
+use serenity::model::Permissions;
+use serenity::model::prelude::PermissionOverwriteType;
 use std::{env, fmt::format, process::Command};
+use serenity::model::prelude::GuildId;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 
 // Definicion de la estructura RoleManager , que gestiona los roles del servidor
@@ -106,9 +111,14 @@ impl RoleButton {
     }
 }
 
-// Definición de la estructura Handler, que manejará los eventos del bot
+// Definición de la estructura Handler ...
 struct Handler {
     role_manager: RoleManager,
+    // Utiliza Arc<RwLock<>> para permitir el acceso seguro entre múltiples tareas asincrónicas
+    stats_category_id: Arc<RwLock<Option<ChannelId>>>,
+    all_members_channel_id: Arc<RwLock<Option<ChannelId>>>,
+    members_channel_id: Arc<RwLock<Option<ChannelId>>>,
+    bots_channel_id: Arc<RwLock<Option<ChannelId>>>,
 }
 
 impl Handler {
@@ -170,7 +180,98 @@ impl Handler {
                 ])
             }).await.expect("Error al enviar el mensaje.");
     }
+    
+    async fn initialize_or_update_stats_channels(&self, ctx: &Context, guild_id: GuildId) -> Result<(), serenity::Error> {
+        // Primero, tratamos de leer si ya tenemos un category_id almacenado.
+        let category_id = {
+            let read_guard = self.stats_category_id.read().await;
+            if let Some(id) = *read_guard {
+                id
+            } else {
+                // Si no hay un category_id almacenado, creamos la categoría y actualizamos el RwLock.
+                drop(read_guard); // Suelta el guard antes de realizar operaciones de bloqueo.
+                let category = guild_id.create_channel(&ctx.http, |c| {
+                    c.name("SERVER STATS").kind(ChannelType::Category)
+                }).await?;
+                let mut write_guard = self.stats_category_id.write().await;
+                *write_guard = Some(category.id);
+                category.id
+            }
+        };
 
+        // Ahora que tenemos el category_id, podemos proceder a obtener o crear los canales.
+        let all_members_channel_id = self.get_or_create_stats_channel(ctx, guild_id, category_id, "All Members").await?;
+        let members_channel_id = self.get_or_create_stats_channel(ctx, guild_id, category_id, "Members").await?;
+        let bots_channel_id = self.get_or_create_stats_channel(ctx, guild_id, category_id, "Bots").await?;
+
+        // Actualizamos los RwLocks con los IDs de los canales.
+        {
+            let mut write_guard = self.all_members_channel_id.write().await;
+            *write_guard = Some(all_members_channel_id);
+        }
+        {
+            let mut write_guard = self.members_channel_id.write().await;
+            *write_guard = Some(members_channel_id);
+        }
+        {
+            let mut write_guard = self.bots_channel_id.write().await;
+            *write_guard = Some(bots_channel_id);
+        }
+
+        Ok(())
+    }
+    
+    async fn get_or_create_stats_channel(&self, ctx: &Context, guild_id: GuildId, category_id: ChannelId, channel_name: &str) -> Result<ChannelId, serenity::Error> {
+        // Definir los permisos de sobreescritura para el canal de voz.
+        let overwrites = vec![
+            PermissionOverwrite {
+                allow: Permissions::VIEW_CHANNEL,
+                deny: Permissions::CONNECT, // Los usuarios no pueden unirse a los canales de voz de estadísticas.
+                kind: PermissionOverwriteType::Role(guild_id.0.into()), // Aplica a todos los miembros.
+            },
+        ];
+    
+        // Buscar el canal por nombre dentro de la categoría especificada.
+        let channels = guild_id.channels(&ctx.http).await?;
+        if let Some((id, _)) = channels.iter().find(|(_, c)| c.name.starts_with(channel_name) && c.kind == ChannelType::Voice && c.parent_id == Some(category_id)) {
+            Ok(*id)
+        } else {
+            // Si no se encuentra, crear el canal de voz con los permisos definidos.
+            let channel = guild_id.create_channel(&ctx.http, |c| {
+                c.name(format!("{}: 0", channel_name)) // Inicialmente, ponemos un contador a 0.
+                 .kind(ChannelType::Voice)
+                 .category(category_id)
+                 .permissions(overwrites)
+            }).await?;
+            Ok(channel.id)
+        }
+    }
+    
+    // Método para iniciar el bucle de actualización de estadísticas.
+    async fn start_stats_update_loop(
+        ctx: Arc<Context>, 
+        guild_id: GuildId,
+        all_members_channel_id: Arc<RwLock<Option<ChannelId>>>,
+        members_channel_id: Arc<RwLock<Option<ChannelId>>>,
+        bots_channel_id: Arc<RwLock<Option<ChannelId>>>
+    ) {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(600));
+        loop {
+            interval.tick().await;
+            if let Err(e) = update_stats_channels(
+                &ctx, 
+                guild_id, 
+                &all_members_channel_id, 
+                &members_channel_id, 
+                &bots_channel_id
+            ).await {
+                println!("Error updating stats channels: {:?}", e);
+            }
+        }
+    }
+    
+    
+    
     // Asegúrate de actualizar la firma de send_compile_example para aceptar ChannelId directamente.
     async fn send_compile_example(&self, ctx: &Context, channel_id: ChannelId) {
         let example_code = "¡Aquí tienes un ejemplo de código Rust que puedes compilar!\n\nEscribe en el chat el siguiente comando y código:\n\n!compile \\`\\`\\`rust\nfn main() {\n    println!(\"Esto es un ejemplo que compila\");\n}\n\\`\\`\\`";
@@ -387,7 +488,33 @@ impl EventHandler for Handler {
     }
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+
+        // ID del servidor donde el bot está operando.
+        let guild_id = GuildId(1117873488334700615); // Reemplaza con el ID de tu servidor.
+
+        // Inicializar o actualizar canales de estadísticas.
+        if let Err(e) = self.initialize_or_update_stats_channels(&ctx, guild_id).await {
+            println!("Error initializing or updating stats channels: {:?}", e);
+        }
+
+        // Envío del mensaje de bienvenida y otras inicializaciones.
         self.send_welcome_message(&ctx).await;
+
+        // Iniciar el bucle para actualizar las estadísticas periódicamente.
+        let ctx_arc = Arc::new(ctx);
+        let all_members_channel_id = self.all_members_channel_id.clone();
+        let members_channel_id = self.members_channel_id.clone();
+        let bots_channel_id = self.bots_channel_id.clone();
+
+        tokio::spawn(async move {
+            Handler::start_stats_update_loop(
+                ctx_arc, 
+                guild_id, 
+                all_members_channel_id,
+                members_channel_id,
+                bots_channel_id
+            ).await;
+        });
     }
 }
 
@@ -400,7 +527,14 @@ async fn main() {
 
     let role_manager = RoleManager::new();
 
-    let handler = Handler { role_manager };
+    // Inicializa los campos de `Handler` con valores predeterminados.
+    let handler = Handler { 
+        role_manager,
+        stats_category_id: Arc::new(RwLock::new(None)),
+        all_members_channel_id: Arc::new(RwLock::new(None)),
+        members_channel_id: Arc::new(RwLock::new(None)),
+        bots_channel_id: Arc::new(RwLock::new(None)),
+    };
 
     let mut client = Client::builder(&token, intents)
         .event_handler(handler) // Usar la instancia 'handler' en lugar de la estructura 'Handler'
@@ -412,6 +546,7 @@ async fn main() {
         println!("Client error: {:?}", why);
     }
 }
+
 
 fn create_role_buttons() -> Vec<RoleButton> {
     vec![
@@ -436,3 +571,40 @@ fn create_role_buttons() -> Vec<RoleButton> {
         RoleButton::new("role_expert", "🏆 Expert Player"),
     ]
 }
+
+async fn update_stats_channels(
+    ctx: &Context,
+    guild_id: GuildId,
+    all_members_channel_id: &Arc<RwLock<Option<ChannelId>>>,
+    members_channel_id: &Arc<RwLock<Option<ChannelId>>>,
+    bots_channel_id: &Arc<RwLock<Option<ChannelId>>>
+) -> Result<(), serenity::Error> {
+    let guild = match guild_id.to_guild_cached(&ctx.cache) {
+        Some(guild) => guild,
+        None => return Err(serenity::Error::Other("Guild not found in cache")),
+    };
+
+    let all_members = guild.member_count;
+
+    // Obtener la lista de bots con un límite de 1000 (o el límite que desees).
+    let bots = guild.members(&ctx.http, Some(1000), None).await?
+        .iter()
+        .filter(|member| member.user.bot)
+        .count();
+    let members = all_members - bots as u64;
+
+    // Actualizar nombres de canales.
+    if let Some(id) = *all_members_channel_id.read().await {
+        id.edit(&ctx.http, |c| c.name(format!("All Members: {}", all_members))).await?;
+    }
+    if let Some(id) = *members_channel_id.read().await {
+        id.edit(&ctx.http, |c| c.name(format!("Members: {}", members))).await?;
+    }
+    if let Some(id) = *bots_channel_id.read().await {
+        id.edit(&ctx.http, |c| c.name(format!("Bots: {}", bots))).await?;
+    }
+
+    Ok(())
+}
+
+
