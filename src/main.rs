@@ -1,17 +1,11 @@
 //Importaciones actualizadas
 use serenity::{
     async_trait,
-    framework::standard::{
-        macros::{command, group},
-        CommandResult, StandardFramework,
-    },
-    http::Http,
+    framework::standard::StandardFramework,
     model::{
-        application::{component::ButtonStyle, interaction::InteractionResponseType},
+        application::component::ButtonStyle,
         channel::{Message, Reaction, ReactionType},
-        event::ResumedEvent,
         gateway::{GatewayIntents, Ready},
-        guild,
         id::ChannelId,
         prelude::Interaction,
     },
@@ -27,7 +21,7 @@ use std::collections::HashMap;
 use serenity::model::prelude::PermissionOverwrite;
 use serenity::model::Permissions;
 use serenity::model::prelude::PermissionOverwriteType;
-use std::{env, fmt::format, process::Command};
+use std::{env, process::Command};
 use serenity::model::prelude::GuildId;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
