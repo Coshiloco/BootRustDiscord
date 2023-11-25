@@ -127,6 +127,7 @@ impl Handler {
                     e.title("Funcionalidades del Bot Rust")
                      .description("Este bot puede compilar y ejecutar tu código Rust. Usa el comando `!compile` seguido de tu código en un bloque de código para probarlo.")
                      .field("¿Cómo usar este bot?", "A continuación, te explico cómo puedes interactuar conmigo:", false)
+                     .field("Cuenta el bumero de membros y la cantidad de bots que hay en el server", "", false)
                      .field("Compilar Código", "Reacciona con 🔨 y te enviaré una plantilla de código que puedes compilar.", false)
                      .field("Obtener un Ejemplo", "Reacciona con 📚 y te proporcionaré un ejemplo de código Rust.", false)
                      .field("Ejemplo de Compilación", "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```", false)
@@ -185,7 +186,7 @@ impl Handler {
                 // Si no hay un category_id almacenado, creamos la categoría y actualizamos el RwLock.
                 drop(read_guard); // Suelta el guard antes de realizar operaciones de bloqueo.
                 let category = guild_id.create_channel(&ctx.http, |c| {
-                    c.name("SERVER STATS").kind(ChannelType::Category)
+                    c.name("🔒 - SERVER STATS - 🔒").kind(ChannelType::Category)
                 }).await?;
                 let mut write_guard = self.stats_category_id.write().await;
                 *write_guard = Some(category.id);
